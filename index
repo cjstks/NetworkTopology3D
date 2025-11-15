@@ -1,358 +1,698 @@
-import React, { useEffect, useRef, useState } from 'react';
-import * as THREE from 'three';
-
-const NetworkTopology3D = () => {
-  const containerRef = useRef(null);
-  const [animationSpeed, setAnimationSpeed] = useState(1);
-  const [showLabels, setShowLabels] = useState(true);
-  const sceneRef = useRef(null);
-  const rendererRef = useRef(null);
-  const cameraRef = useRef(null);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-
-    // Scene setup
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf0f0f0);
-    sceneRef.current = scene;
-
-    // Camera
-    const camera = new THREE.PerspectiveCamera(
-      60,
-      containerRef.current.clientWidth / containerRef.current.clientHeight,
-      0.1,
-      1000
-    );
-    camera.position.set(0, 15, 25);
-    camera.lookAt(0, 0, 0);
-    cameraRef.current = camera;
-
-    // Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
-    containerRef.current.appendChild(renderer.domElement);
-    rendererRef.current = renderer;
-
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    scene.add(ambientLight);
-
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(10, 20, 10);
-    scene.add(directionalLight);
-
-    // Grid
-    const gridHelper = new THREE.GridHelper(40, 40, 0xcccccc, 0xe0e0e0);
-    scene.add(gridHelper);
-
-    // Router positions
-    const positions = {
-      N9K1: { x: -8, y: 2, z: 5 },
-      N9K2: { x: 8, y: 2, z: 5 },
-      N9K3: { x: -12, y: 0, z: -3 },
-      N9K4: { x: 12, y: 0, z: -3 },
-      Server1: { x: -12, y: 0, z: -10 },
-      Server2: { x: 12, y: 0, z: -10 }
-    };
-
-    // Create routers
-    const routers = {};
-    const createRouter = (name, position, color) => {
-      const group = new THREE.Group();
-      
-      // Main body
-      const geometry = new THREE.BoxGeometry(1.5, 2, 1.5);
-      const material = new THREE.MeshPhongMaterial({ 
-        color: color,
-        specular: 0x444444,
-        shininess: 30
-      });
-      const mesh = new THREE.Mesh(geometry, material);
-      group.add(mesh);
-
-      // Front panel
-      const panelGeo = new THREE.BoxGeometry(1.6, 0.3, 0.1);
-      const panelMat = new THREE.MeshPhongMaterial({ color: 0x333333 });
-      for (let i = 0; i < 4; i++) {
-        const panel = new THREE.Mesh(panelGeo, panelMat);
-        panel.position.set(0, -0.7 + i * 0.5, 0.76);
-        group.add(panel);
-      }
-
-      // LED indicators
-      for (let i = 0; i < 6; i++) {
-        const ledGeo = new THREE.SphereGeometry(0.05);
-        const ledMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-        const led = new THREE.Mesh(ledGeo, ledMat);
-        led.position.set(-0.6 + i * 0.25, 0.8, 0.77);
-        group.add(led);
-        
-        // Animate LEDs
-        led.userData.animation = (time) => {
-          const brightness = Math.sin(time * 3 + i * 0.5) * 0.3 + 0.7;
-          ledMat.color.setHSL(0.33, 1, brightness);
-        };
-      }
-
-      group.position.set(position.x, position.y, position.z);
-      scene.add(group);
-      routers[name] = group;
-      return group;
-    };
-
-    // Create servers
-    const createServer = (name, position) => {
-      const group = new THREE.Group();
-      
-      const geometry = new THREE.BoxGeometry(1, 1.5, 1);
-      const material = new THREE.MeshPhongMaterial({ 
-        color: name === 'Server1' ? 0x4a90e2 : 0xe24a4a,
-        specular: 0x666666,
-        shininess: 40
-      });
-      const mesh = new THREE.Mesh(geometry, material);
-      group.add(mesh);
-
-      // Server icon
-      const iconGeo = new THREE.PlaneGeometry(0.6, 0.6);
-      const iconMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-      const icon = new THREE.Mesh(iconGeo, iconMat);
-      icon.position.set(0, 0, 0.51);
-      group.add(icon);
-
-      group.position.set(position.x, position.y, position.z);
-      scene.add(group);
-      routers[name] = group;
-      return group;
-    };
-
-    createRouter('N9K1', positions.N9K1, 0x2196f3);
-    createRouter('N9K2', positions.N9K2, 0x2196f3);
-    createRouter('N9K3', positions.N9K3, 0x4caf50);
-    createRouter('N9K4', positions.N9K4, 0x4caf50);
-    createServer('Server1', positions.Server1);
-    createServer('Server2', positions.Server2);
-
-    // Connection lines
-    const connections = [
-      { from: 'N9K1', to: 'N9K3', label: '1.1.13.0/30' },
-      { from: 'N9K1', to: 'N9K4', label: '1.1.14.0/30' },
-      { from: 'N9K2', to: 'N9K3', label: '1.1.23.0/30' },
-      { from: 'N9K2', to: 'N9K4', label: '1.1.24.0/30' },
-      { from: 'N9K3', to: 'Server1' },
-      { from: 'N9K4', to: 'Server2' }
-    ];
-
-    const dataPackets = [];
-    
-    connections.forEach((conn, index) => {
-      const fromPos = positions[conn.from];
-      const toPos = positions[conn.to];
-      
-      // Create curved line
-      const curve = new THREE.QuadraticBezierCurve3(
-        new THREE.Vector3(fromPos.x, fromPos.y, fromPos.z),
-        new THREE.Vector3(
-          (fromPos.x + toPos.x) / 2,
-          Math.max(fromPos.y, toPos.y) + 2,
-          (fromPos.z + toPos.z) / 2
-        ),
-        new THREE.Vector3(toPos.x, toPos.y, toPos.z)
-      );
-
-      const points = curve.getPoints(50);
-      const geometry = new THREE.BufferGeometry().setFromPoints(points);
-      const material = new THREE.LineBasicMaterial({ 
-        color: 0x0066cc,
-        linewidth: 2
-      });
-      const line = new THREE.Line(geometry, material);
-      scene.add(line);
-
-      // Data packets
-      for (let i = 0; i < 2; i++) {
-        const packetGeo = new THREE.SphereGeometry(0.15);
-        const packetMat = new THREE.MeshBasicMaterial({ 
-          color: 0xffff00,
-          transparent: true,
-          opacity: 0.8
-        });
-        const packet = new THREE.Mesh(packetGeo, packetMat);
-        packet.userData = {
-          curve: curve,
-          progress: i * 0.5,
-          speed: 0.3 + Math.random() * 0.2,
-          index: index
-        };
-        scene.add(packet);
-        dataPackets.push(packet);
-      }
-    });
-
-    // Labels
-    const labels = [];
-    const createLabel = (text, position) => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      canvas.width = 256;
-      canvas.height = 64;
-      
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = 'black';
-      ctx.font = 'bold 24px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText(text, 128, 40);
-      
-      const texture = new THREE.CanvasTexture(canvas);
-      const material = new THREE.SpriteMaterial({ map: texture });
-      const sprite = new THREE.Sprite(material);
-      sprite.position.set(position.x, position.y + 2, position.z);
-      sprite.scale.set(3, 0.75, 1);
-      scene.add(sprite);
-      labels.push(sprite);
-      return sprite;
-    };
-
-    Object.keys(positions).forEach(name => {
-      createLabel(name, positions[name]);
-    });
-
-    // Animation
-    let time = 0;
-    const animate = () => {
-      requestAnimationFrame(animate);
-      time += 0.016 * animationSpeed;
-
-      // Rotate camera
-      camera.position.x = Math.sin(time * 0.1) * 25;
-      camera.position.z = Math.cos(time * 0.1) * 25;
-      camera.lookAt(0, 0, 0);
-
-      // Animate LEDs
-      Object.values(routers).forEach(router => {
-        router.children.forEach(child => {
-          if (child.userData.animation) {
-            child.userData.animation(time);
-          }
-        });
-      });
-
-      // Animate data packets
-      dataPackets.forEach(packet => {
-        packet.userData.progress += 0.01 * packet.userData.speed * animationSpeed;
-        if (packet.userData.progress > 1) {
-          packet.userData.progress = 0;
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D 네트워크 토폴로지 - Underlay/Overlay</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        
-        const point = packet.userData.curve.getPoint(packet.userData.progress);
-        packet.position.copy(point);
-        
-        // Pulse effect
-        const scale = 1 + Math.sin(time * 5 + packet.userData.index) * 0.3;
-        packet.scale.set(scale, scale, scale);
-      });
-
-      // Toggle label visibility
-      labels.forEach(label => {
-        label.visible = showLabels;
-      });
-
-      renderer.render(scene, camera);
-    };
-
-    animate();
-
-    // Handle resize
-    const handleResize = () => {
-      if (!containerRef.current) return;
-      camera.aspect = containerRef.current.clientWidth / containerRef.current.clientHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
-    };
-
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      if (containerRef.current && renderer.domElement) {
-        containerRef.current.removeChild(renderer.domElement);
-      }
-      renderer.dispose();
-    };
-  }, [animationSpeed, showLabels]);
-
-  const captureFrame = () => {
-    if (rendererRef.current) {
-      const dataUrl = rendererRef.current.domElement.toDataURL('image/png');
-      const link = document.createElement('a');
-      link.download = `network-frame-${Date.now()}.png`;
-      link.href = dataUrl;
-      link.click();
-    }
-  };
-
-  return (
-    <div className="w-full h-screen bg-gray-100 flex flex-col">
-      <div className="bg-white shadow-md p-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-800">3D 네트워크 토폴로지</h1>
-        <div className="flex gap-4 items-center">
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">속도:</label>
-            <input
-              type="range"
-              min="0.1"
-              max="3"
-              step="0.1"
-              value={animationSpeed}
-              onChange={(e) => setAnimationSpeed(parseFloat(e.target.value))}
-              className="w-32"
-            />
-            <span className="text-sm w-12">{animationSpeed.toFixed(1)}x</span>
-          </div>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={showLabels}
-              onChange={(e) => setShowLabels(e.target.checked)}
-              className="w-4 h-4"
-            />
-            <span className="text-sm font-medium">라벨 표시</span>
-          </label>
-          <button
-            onClick={captureFrame}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-          >
-            📸 캡처
-          </button>
+        body {
+            font-family: Arial, sans-serif;
+            background: #ffffff;
+            color: #333;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            font-size: 24px;
+            color: white;
+        }
+        .controls {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(255,255,255,0.2);
+            padding: 8px 12px;
+            border-radius: 6px;
+        }
+        .control-group label {
+            font-size: 14px;
+            font-weight: 500;
+            color: white;
+        }
+        .control-group input[type="range"] {
+            width: 120px;
+        }
+        .control-group span {
+            min-width: 40px;
+            font-size: 14px;
+            color: white;
+        }
+        button {
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 2px solid white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: white;
+            color: #667eea;
+        }
+        button.active {
+            background: white;
+            color: #667eea;
+        }
+        #canvas-container {
+            width: 100%;
+            height: calc(100vh - 280px);
+            position: relative;
+            cursor: grab;
+        }
+        #canvas-container:active {
+            cursor: grabbing;
+        }
+        .footer {
+            background: #f8f9fa;
+            border-top: 2px solid #667eea;
+            padding: 20px 30px;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            font-size: 13px;
+        }
+        .info-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .info-section h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+        .info-section div {
+            color: #555;
+            margin: 8px 0;
+            line-height: 1.6;
+        }
+        .info-section strong {
+            color: #333;
+        }
+        .legend {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255,255,255,0.95);
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #667eea;
+            z-index: 100;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .legend h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 8px 0;
+            font-size: 12px;
+            color: #333;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            margin-right: 10px;
+            border: 1px solid #ddd;
+        }
+        .controls-info {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(255,255,255,0.95);
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #667eea;
+            z-index: 100;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            font-size: 12px;
+            color: #333;
+        }
+        .controls-info div {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+<div class="header">
+    <h1>🌐 VXLAN 네트워크: Underlay & Overlay</h1>
+    <div class="controls">
+        <div class="control-group">
+            <label>애니메이션 속도:</label>
+            <input type="range" id="speedControl" min="0" max="3" step="0.1" value="1">
+            <span id="speedValue">1.0x</span>
         </div>
-      </div>
-      <div ref={containerRef} className="flex-1" />
-      <div className="bg-white border-t p-4">
-        <div className="grid grid-cols-3 gap-4 text-sm">
-          <div>
-            <strong>VNI:</strong> 10011
-          </div>
-          <div>
-            <strong>Underlay:</strong> OSPF
-          </div>
-          <div>
-            <strong>Loopback:</strong> /32
-          </div>
-          <div>
-            <strong>Mcast Group:</strong> 225.0.0.10
-          </div>
-          <div>
-            <strong>Mcast RP:</strong> 10.1.1.10
-          </div>
-          <div>
-            <strong>VLANs:</strong> 11 (Server1: 172.16.11.11/24, Server2: 172.16.11.12/24)
-          </div>
+        <div class="control-group">
+            <label>
+                <input type="checkbox" id="labelToggle" checked>
+                라벨
+            </label>
         </div>
-      </div>
+        <button id="underlayBtn" class="active">Underlay</button>
+        <button id="overlayBtn" class="active">Overlay</button>
+        <button id="captureBtn">📸 캡처</button>
     </div>
-  );
-};
+</div>
 
-export default NetworkTopology3D;
+<div id="canvas-container">
+    <div class="legend">
+        <h3>📊 네트워크 레이어</h3>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #3498db;"></div>
+            <span>Underlay (물리적 인프라)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #e74c3c;"></div>
+            <span>Overlay (가상 네트워크)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #2ecc71;"></div>
+            <span>Spine 스위치</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #27ae60;"></div>
+            <span>Leaf 스위치 (VTEP)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #95a5a6;"></div>
+            <span>서버</span>
+        </div>
+    </div>
+    <div class="controls-info">
+        <div><strong>🖱️ 마우스 조작</strong></div>
+        <div>• 좌클릭 + 드래그: 회전</div>
+        <div>• 스크롤: 줌 인/아웃</div>
+        <div>• 우클릭 + 드래그: 이동</div>
+    </div>
+</div>
+
+<div class="footer">
+    <div class="info-grid">
+        <div class="info-section">
+            <h3>🔷 Underlay (물리적 네트워크)</h3>
+            <div><strong>개념:</strong> 데이터가 실제로 이동하는 물리적 네트워크 인프라</div>
+            <div><strong>구성요소:</strong> 스위치, 라우터, 케이블 등 물리적 장비</div>
+            <div><strong>역할:</strong> Overlay 네트워크를 위한 기본 IP 라우팅 경로 제공 (OSPF Area 0)</div>
+            <div><strong>프로토콜:</strong> OSPF, PIM Sparse-Mode</div>
+            <div><strong>물리적 연결:</strong>
+                <br>• N9K-1 ↔ N9K-3: 1.1.13.0/30
+                <br>• N9K-1 ↔ N9K-4: 1.1.14.0/30
+                <br>• N9K-2 ↔ N9K-3: 1.1.23.0/30
+                <br>• N9K-2 ↔ N9K-4: 1.1.24.0/30
+            </div>
+            <div><strong>특징:</strong> Spine-Leaf 구조로 모든 Leaf가 모든 Spine에 연결</div>
+        </div>
+        <div class="info-section">
+            <h3>🔶 Overlay (가상 네트워크)</h3>
+            <div><strong>개념:</strong> Underlay 위에 구축된 논리적 가상 네트워크</div>
+            <div><strong>구성요소:</strong> VTEP(Virtual Tunnel End Point) 장비들</div>
+            <div><strong>역할:</strong> VXLAN 캡슐화를 통해 물리적 위치 상관없이 L2 네트워크 확장</div>
+            <div><strong>기술:</strong> VXLAN (L2 over L3 tunneling)</div>
+            <div><strong>가상 터널:</strong>
+                <br>• VNI: 10011 (VLAN 11 매핑)
+                <br>• VTEP: N9K-3 (10.1.1.3) ↔ N9K-4 (10.1.1.4)
+                <br>• Multicast Group: 225.0.0.10
+                <br>• RP Address: 10.1.1.10 (Anycast)
+            </div>
+            <div><strong>서버 연결:</strong>
+                <br>• Server1 (172.16.11.11) → N9K-3 VTEP
+                <br>• Server2 (172.16.11.12) → N9K-4 VTEP
+            </div>
+            <div><strong>특징:</strong> 물리적 인프라 정보 없이 논리적으로 연결</div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+    var scene, camera, renderer;
+    var routers = {};
+    var underlayPackets = [];
+    var overlayPackets = [];
+    var underlayLines = [];
+    var overlayLines = [];
+    var labels = [];
+    var animationSpeed = 1;
+    var showLabels = true;
+    var showUnderlay = true;
+    var showOverlay = true;
+    var time = 0;
+
+    var isDragging = false;
+    var previousMousePosition = { x: 0, y: 0 };
+    var cameraRotation = { x: 0, y: 0 };
+    var cameraDistance = 35;
+    var cameraTarget = new THREE.Vector3(0, 0, 0);
+
+    var positions = {
+        N9K1: { x: -10, y: 4, z: 8 },
+        N9K2: { x: 10, y: 4, z: 8 },
+        N9K3: { x: -10, y: 0, z: -4 },
+        N9K4: { x: 10, y: 0, z: -4 },
+        Server1: { x: -10, y: 0, z: -12 },
+        Server2: { x: 10, y: 0, z: -12 }
+    };
+
+    function init() {
+        var container = document.getElementById('canvas-container');
+
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf5f5f5);
+        scene.fog = new THREE.Fog(0xf5f5f5, 40, 80);
+
+        camera = new THREE.PerspectiveCamera(
+            60,
+            container.clientWidth / container.clientHeight,
+            0.1,
+            1000
+        );
+        updateCameraPosition();
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        var ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        var directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight1.position.set(20, 30, 20);
+        scene.add(directionalLight1);
+
+        var directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+        directionalLight2.position.set(-20, 20, -20);
+        scene.add(directionalLight2);
+
+        var gridHelper = new THREE.GridHelper(60, 60, 0xcccccc, 0xe0e0e0);
+        scene.add(gridHelper);
+
+        createRouter('N9K1', positions.N9K1, 0x2ecc71, 'Spine', false);
+        createRouter('N9K2', positions.N9K2, 0x2ecc71, 'Spine', false);
+        createRouter('N9K3', positions.N9K3, 0x27ae60, 'Leaf', true);
+        createRouter('N9K4', positions.N9K4, 0x27ae60, 'Leaf', true);
+        createServer('Server1', positions.Server1, 0x95a5a6);
+        createServer('Server2', positions.Server2, 0x95a5a6);
+
+        var underlayConnections = [
+            { from: 'N9K1', to: 'N9K3', label: '1.1.13.0/30' },
+            { from: 'N9K1', to: 'N9K4', label: '1.1.14.0/30' },
+            { from: 'N9K2', to: 'N9K3', label: '1.1.23.0/30' },
+            { from: 'N9K2', to: 'N9K4', label: '1.1.24.0/30' }
+        ];
+
+        var overlayConnections = [
+            { from: 'N9K3', to: 'N9K4', label: 'VXLAN Tunnel' },
+            { from: 'N9K3', to: 'Server1', label: 'VLAN 11' },
+            { from: 'N9K4', to: 'Server2', label: 'VLAN 11' }
+        ];
+
+        for (var i = 0; i < underlayConnections.length; i++) {
+            createConnection(underlayConnections[i].from, underlayConnections[i].to, i, 'underlay');
+        }
+
+        for (var j = 0; j < overlayConnections.length; j++) {
+            createConnection(overlayConnections[j].from, overlayConnections[j].to, j, 'overlay');
+        }
+
+        var posKeys = Object.keys(positions);
+        for (var k = 0; k < posKeys.length; k++) {
+            createLabel(posKeys[k], positions[posKeys[k]]);
+        }
+
+        window.addEventListener('resize', onWindowResize);
+
+        renderer.domElement.addEventListener('mousedown', onMouseDown);
+        renderer.domElement.addEventListener('mousemove', onMouseMove);
+        renderer.domElement.addEventListener('mouseup', onMouseUp);
+        renderer.domElement.addEventListener('wheel', onMouseWheel);
+        renderer.domElement.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+
+        document.getElementById('speedControl').addEventListener('input', function(e) {
+            animationSpeed = parseFloat(e.target.value);
+            document.getElementById('speedValue').textContent = animationSpeed.toFixed(1) + 'x';
+        });
+
+        document.getElementById('labelToggle').addEventListener('change', function(e) {
+            showLabels = e.target.checked;
+        });
+
+        document.getElementById('underlayBtn').addEventListener('click', function() {
+            showUnderlay = !showUnderlay;
+            this.classList.toggle('active');
+        });
+
+        document.getElementById('overlayBtn').addEventListener('click', function() {
+            showOverlay = !showOverlay;
+            this.classList.toggle('active');
+        });
+
+        document.getElementById('captureBtn').addEventListener('click', captureFrame);
+
+        animate();
+    }
+
+    function onMouseDown(e) {
+        isDragging = true;
+        previousMousePosition = { x: e.clientX, y: e.clientY };
+    }
+
+    function onMouseMove(e) {
+        if (!isDragging) return;
+
+        var deltaX = e.clientX - previousMousePosition.x;
+        var deltaY = e.clientY - previousMousePosition.y;
+
+        if (e.buttons === 1) {
+            cameraRotation.y += deltaX * 0.005;
+            cameraRotation.x += deltaY * 0.005;
+            cameraRotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, cameraRotation.x));
+        } else if (e.buttons === 2) {
+            var right = new THREE.Vector3();
+            var up = new THREE.Vector3(0, 1, 0);
+            camera.getWorldDirection(right);
+            right.cross(up).normalize();
+
+            cameraTarget.add(right.multiplyScalar(-deltaX * 0.02));
+            cameraTarget.y -= deltaY * 0.02;
+        }
+
+        updateCameraPosition();
+        previousMousePosition = { x: e.clientX, y: e.clientY };
+    }
+
+    function onMouseUp() {
+        isDragging = false;
+    }
+
+    function onMouseWheel(e) {
+        e.preventDefault();
+        cameraDistance += e.deltaY * 0.02;
+        cameraDistance = Math.max(10, Math.min(80, cameraDistance));
+        updateCameraPosition();
+    }
+
+    function updateCameraPosition() {
+        var x = cameraDistance * Math.sin(cameraRotation.y) * Math.cos(cameraRotation.x);
+        var y = cameraDistance * Math.sin(cameraRotation.x);
+        var z = cameraDistance * Math.cos(cameraRotation.y) * Math.cos(cameraRotation.x);
+
+        camera.position.set(
+            cameraTarget.x + x,
+            cameraTarget.y + y,
+            cameraTarget.z + z
+        );
+        camera.lookAt(cameraTarget);
+    }
+
+    function createRouter(name, position, color, type, isVTEP) {
+        var group = new THREE.Group();
+
+        var geometry = new THREE.BoxGeometry(2, 3, 2);
+        var material = new THREE.MeshPhongMaterial({
+            color: color,
+            specular: 0x444444,
+            shininess: 30
+        });
+        var mesh = new THREE.Mesh(geometry, material);
+        group.add(mesh);
+
+        var edgesGeo = new THREE.EdgesGeometry(geometry);
+        var edgesMat = new THREE.LineBasicMaterial({ color: 0x333333, linewidth: 2 });
+        var edges = new THREE.LineSegments(edgesGeo, edgesMat);
+        group.add(edges);
+
+        var panelGeo = new THREE.BoxGeometry(2.1, 0.3, 0.1);
+        var panelMat = new THREE.MeshPhongMaterial({ color: 0x2c3e50 });
+        for (var i = 0; i < 5; i++) {
+            var panel = new THREE.Mesh(panelGeo, panelMat);
+            panel.position.set(0, -1.2 + i * 0.6, 1.01);
+            group.add(panel);
+        }
+
+        var leds = [];
+        for (var i = 0; i < 8; i++) {
+            var ledGeo = new THREE.SphereGeometry(0.08);
+            var ledMat = new THREE.MeshBasicMaterial({ color: 0x2ecc71 });
+            var led = new THREE.Mesh(ledGeo, ledMat);
+            led.position.set(-0.8 + i * 0.23, 1.2, 1.02);
+            led.userData = { ledIndex: i, material: ledMat };
+            group.add(led);
+            leds.push(led);
+        }
+        group.userData.leds = leds;
+
+        if (isVTEP) {
+            var vtepLabelGeo = new THREE.BoxGeometry(1.5, 0.3, 0.1);
+            var vtepLabelMat = new THREE.MeshBasicMaterial({ color: 0xe74c3c });
+            var vtepLabel = new THREE.Mesh(vtepLabelGeo, vtepLabelMat);
+            vtepLabel.position.set(0, -1.7, 1.02);
+            group.add(vtepLabel);
+        }
+
+        group.position.set(position.x, position.y, position.z);
+        scene.add(group);
+        routers[name] = group;
+    }
+
+    function createServer(name, position, color) {
+        var group = new THREE.Group();
+
+        var geometry = new THREE.BoxGeometry(1.5, 2, 1.5);
+        var material = new THREE.MeshPhongMaterial({
+            color: color,
+            specular: 0x444444,
+            shininess: 30
+        });
+        var mesh = new THREE.Mesh(geometry, material);
+        group.add(mesh);
+
+        var edgesGeo = new THREE.EdgesGeometry(geometry);
+        var edgesMat = new THREE.LineBasicMaterial({ color: 0x333333, linewidth: 2 });
+        var edges = new THREE.LineSegments(edgesGeo, edgesMat);
+        group.add(edges);
+
+        var iconGeo = new THREE.CircleGeometry(0.5, 32);
+        var iconMat = new THREE.MeshBasicMaterial({ color: 0x2c3e50 });
+        var icon = new THREE.Mesh(iconGeo, iconMat);
+        icon.position.set(0, 0, 0.76);
+        group.add(icon);
+
+        group.position.set(position.x, position.y, position.z);
+        scene.add(group);
+        routers[name] = group;
+    }
+
+    function createConnection(fromName, toName, index, type) {
+        var fromPos = positions[fromName];
+        var toPos = positions[toName];
+
+        var midY = Math.max(fromPos.y, toPos.y) + (type === 'overlay' ? 6 : 2);
+
+        var curve = new THREE.QuadraticBezierCurve3(
+            new THREE.Vector3(fromPos.x, fromPos.y, fromPos.z),
+            new THREE.Vector3(
+                (fromPos.x + toPos.x) / 2,
+                midY,
+                (fromPos.z + toPos.z) / 2
+            ),
+            new THREE.Vector3(toPos.x, toPos.y, toPos.z)
+        );
+
+        var points = curve.getPoints(50);
+        var geometry = new THREE.BufferGeometry().setFromPoints(points);
+
+        var lineColor = type === 'overlay' ? 0xe74c3c : 0x3498db;
+        var material = new THREE.LineBasicMaterial({
+            color: lineColor,
+            linewidth: 3,
+            transparent: true,
+            opacity: 0.7
+        });
+
+        var line = new THREE.Line(geometry, material);
+        line.userData.type = type;
+        scene.add(line);
+
+        if (type === 'overlay') {
+            overlayLines.push(line);
+        } else {
+            underlayLines.push(line);
+        }
+
+        var tubeGeo = new THREE.TubeGeometry(curve, 50, type === 'overlay' ? 0.08 : 0.05, 8, false);
+        var tubeMat = new THREE.MeshBasicMaterial({
+            color: lineColor,
+            transparent: true,
+            opacity: 0.4
+        });
+        var tube = new THREE.Mesh(tubeGeo, tubeMat);
+        tube.userData.type = type;
+        scene.add(tube);
+
+        if (type === 'overlay') {
+            overlayLines.push(tube);
+        } else {
+            underlayLines.push(tube);
+        }
+
+        var numPackets = type === 'overlay' ? 2 : 3;
+        for (var i = 0; i < numPackets; i++) {
+            var packetGeo = new THREE.SphereGeometry(type === 'overlay' ? 0.25 : 0.15);
+            var packetColor = type === 'overlay' ? 0xf39c12 : 0x3498db;
+            var packetMat = new THREE.MeshBasicMaterial({
+                color: packetColor,
+                transparent: true,
+                opacity: 0.9
+            });
+            var packet = new THREE.Mesh(packetGeo, packetMat);
+
+            packet.userData = {
+                curve: curve,
+                progress: i / numPackets,
+                speed: type === 'overlay' ? 0.15 : 0.25,
+                index: index,
+                type: type
+            };
+            scene.add(packet);
+
+            if (type === 'overlay') {
+                overlayPackets.push(packet);
+            } else {
+                underlayPackets.push(packet);
+            }
+        }
+    }
+
+    function createLabel(text, position) {
+        var canvas = document.createElement('canvas');
+        var ctx = canvas.getContext('2d');
+        canvas.width = 256;
+        canvas.height = 80;
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.strokeStyle = '#667eea';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = 'bold 32px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(text, 128, 50);
+
+        var texture = new THREE.CanvasTexture(canvas);
+        var material = new THREE.SpriteMaterial({ map: texture });
+        var sprite = new THREE.Sprite(material);
+        sprite.position.set(position.x, position.y + 3, position.z);
+        sprite.scale.set(4, 1, 1);
+        scene.add(sprite);
+        labels.push(sprite);
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        time += 0.016 * animationSpeed;
+
+        var routerKeys = Object.keys(routers);
+        for (var i = 0; i < routerKeys.length; i++) {
+            var router = routers[routerKeys[i]];
+            if (router.userData.leds) {
+                var leds = router.userData.leds;
+                for (var j = 0; j < leds.length; j++) {
+                    var led = leds[j];
+                    var brightness = Math.sin(time * 4 + led.userData.ledIndex * 0.8) * 0.3 + 0.7;
+                    led.userData.material.color.setHSL(0.33, 0.8, brightness);
+                }
+            }
+        }
+
+        for (var i = 0; i < underlayPackets.length; i++) {
+            var packet = underlayPackets[i];
+            packet.userData.progress += 0.01 * packet.userData.speed * animationSpeed;
+            if (packet.userData.progress > 1) {
+                packet.userData.progress = 0;
+            }
+
+            var point = packet.userData.curve.getPoint(packet.userData.progress);
+            packet.position.copy(point);
+
+            packet.visible = showUnderlay;
+        }
+
+        for (var i = 0; i < overlayPackets.length; i++) {
+            var packet = overlayPackets[i];
+            packet.userData.progress += 0.008 * packet.userData.speed * animationSpeed;
+            if (packet.userData.progress > 1) {
+                packet.userData.progress = 0;
+            }
+
+            var point = packet.userData.curve.getPoint(packet.userData.progress);
+            packet.position.copy(point);
+
+            var scale = 1 + Math.sin(time * 3 + packet.userData.index) * 0.2;
+            packet.scale.set(scale, scale, scale);
+            packet.visible = showOverlay;
+        }
+
+        for (var i = 0; i < underlayLines.length; i++) {
+            underlayLines[i].visible = showUnderlay;
+        }
+
+        for (var i = 0; i < overlayLines.length; i++) {
+            overlayLines[i].visible = showOverlay;
+        }
+
+        for (var i = 0; i < labels.length; i++) {
+            labels[i].visible = showLabels;
+        }
+
+        renderer.render(scene, camera);
+    }
+
+    function onWindowResize() {
+        var container = document.getElementById('canvas-container');
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container.clientWidth, container.clientHeight);
+    }
+
+    function captureFrame() {
+        var dataUrl = renderer.domElement.toDataURL('image/png');
+        var link = document.createElement('a');
+        link.download = 'vxlan-network-' + Date.now() + '.png';
+        link.href = dataUrl;
+        link.click();
+    }
+
+    init();
+</script>
+</body>
+</html>
