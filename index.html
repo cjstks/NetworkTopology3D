@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D 네트워크 토폴로지 - Underlay/Overlay</title>
+    <title>VXLAN 3D 네트워크 - Virtual Switch</title>
     <style>
         * {
             margin: 0;
@@ -12,12 +12,12 @@
         }
         body {
             font-family: Arial, sans-serif;
-            background: #ffffff;
-            color: #333;
+            background: #1a1a1a;
+            color: #fff;
         }
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
             padding: 15px 30px;
             display: flex;
             justify-content: space-between;
@@ -66,106 +66,99 @@
         }
         button:hover {
             background: white;
-            color: #667eea;
+            color: #3498db;
         }
         button.active {
             background: white;
-            color: #667eea;
+            color: #3498db;
         }
         #canvas-container {
             width: 100%;
-            height: calc(100vh - 280px);
+            height: calc(100vh - 80px);
             position: relative;
             cursor: grab;
+            background: linear-gradient(to bottom, #0a0a0a 0%, #1a1a1a 100%);
         }
         #canvas-container:active {
             cursor: grabbing;
-        }
-        .footer {
-            background: #f8f9fa;
-            border-top: 2px solid #667eea;
-            padding: 20px 30px;
-        }
-        .info-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 20px;
-            font-size: 13px;
-        }
-        .info-section {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            border-left: 4px solid #667eea;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .info-section h3 {
-            color: #667eea;
-            margin-bottom: 15px;
-            font-size: 16px;
-        }
-        .info-section div {
-            color: #555;
-            margin: 8px 0;
-            line-height: 1.6;
-        }
-        .info-section strong {
-            color: #333;
         }
         .legend {
             position: absolute;
             top: 20px;
             left: 20px;
-            background: rgba(255,255,255,0.95);
+            background: rgba(0,0,0,0.8);
             padding: 15px;
             border-radius: 8px;
-            border: 2px solid #667eea;
+            border: 2px solid #3498db;
             z-index: 100;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.5);
         }
         .legend h3 {
-            color: #667eea;
+            color: #3498db;
             margin-bottom: 10px;
             font-size: 14px;
+            font-weight: bold;
         }
         .legend-item {
             display: flex;
             align-items: center;
             margin: 8px 0;
             font-size: 12px;
-            color: #333;
+            color: #fff;
         }
         .legend-color {
             width: 20px;
             height: 20px;
             border-radius: 4px;
             margin-right: 10px;
-            border: 1px solid #ddd;
+            border: 1px solid #666;
         }
         .controls-info {
             position: absolute;
             bottom: 20px;
             right: 20px;
-            background: rgba(255,255,255,0.95);
+            background: rgba(0,0,0,0.8);
             padding: 15px;
             border-radius: 8px;
-            border: 2px solid #667eea;
+            border: 2px solid #3498db;
             z-index: 100;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.5);
             font-size: 12px;
-            color: #333;
+            color: #fff;
         }
         .controls-info div {
             margin: 5px 0;
+        }
+        .info-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #3498db;
+            z-index: 100;
+            max-width: 350px;
+            font-size: 11px;
+            color: #fff;
+        }
+        .info-panel h3 {
+            color: #3498db;
+            margin-bottom: 10px;
+            font-size: 13px;
+        }
+        .info-panel div {
+            margin: 5px 0;
+            line-height: 1.4;
         }
     </style>
 </head>
 <body>
 <div class="header">
-    <h1>🌐 VXLAN 네트워크: Underlay & Overlay</h1>
+    <h1>🌐 VXLAN Spine-Leaf with Virtual Switches</h1>
     <div class="controls">
         <div class="control-group">
-            <label>애니메이션 속도:</label>
+            <label>속도:</label>
             <input type="range" id="speedControl" min="0" max="3" step="0.1" value="1">
             <span id="speedValue">1.0x</span>
         </div>
@@ -177,6 +170,7 @@
         </div>
         <button id="underlayBtn" class="active">Underlay</button>
         <button id="overlayBtn" class="active">Overlay</button>
+        <button id="virtualSwitchBtn" class="active">Virtual Switch</button>
         <button id="captureBtn">📸 캡처</button>
     </div>
 </div>
@@ -186,11 +180,11 @@
         <h3>📊 네트워크 레이어</h3>
         <div class="legend-item">
             <div class="legend-color" style="background: #3498db;"></div>
-            <span>Underlay (물리적 인프라)</span>
+            <span>Underlay (물리 연결)</span>
         </div>
         <div class="legend-item">
             <div class="legend-color" style="background: #e74c3c;"></div>
-            <span>Overlay (가상 네트워크)</span>
+            <span>Overlay (VXLAN 터널)</span>
         </div>
         <div class="legend-item">
             <div class="legend-color" style="background: #2ecc71;"></div>
@@ -201,10 +195,36 @@
             <span>Leaf 스위치 (VTEP)</span>
         </div>
         <div class="legend-item">
+            <div class="legend-color" style="background: #ff6b6b;"></div>
+            <span>Virtual Switch (NVE)</span>
+        </div>
+        <div class="legend-item">
             <div class="legend-color" style="background: #95a5a6;"></div>
             <span>서버</span>
         </div>
     </div>
+
+    <div class="info-panel">
+        <h3>🔷 Underlay Network</h3>
+        <div><strong>• OSPF Area 0</strong></div>
+        <div><strong>• PIM Sparse-Mode</strong></div>
+        <div><strong>• RP: 10.1.1.10 (Anycast)</strong></div>
+        <div style="margin-top: 10px;"><strong>연결:</strong></div>
+        <div>N9K-1 E1/1 ↔ N9K-3 E1/1 (1.1.13.0/30)</div>
+        <div>N9K-1 E1/2 ↔ N9K-4 E1/1 (1.1.14.0/30)</div>
+        <div>N9K-2 E1/1 ↔ N9K-3 E1/2 (1.1.23.0/30)</div>
+        <div>N9K-2 E1/2 ↔ N9K-4 E1/2 (1.1.24.0/30)</div>
+
+        <h3 style="margin-top: 15px;">🔶 Overlay Network</h3>
+        <div><strong>• VNI: 10011</strong></div>
+        <div><strong>• Multicast: 225.0.0.10</strong></div>
+        <div><strong>• VLAN 11 매핑</strong></div>
+        <div style="margin-top: 10px;"><strong>Virtual Switch:</strong></div>
+        <div>N9K-3 NVE1 (10.1.1.3) ↔ Virtual Switch 1</div>
+        <div>N9K-4 NVE1 (10.1.1.4) ↔ Virtual Switch 2</div>
+        <div>Virtual Switch 1 ↔ Virtual Switch 2 (VXLAN)</div>
+    </div>
+
     <div class="controls-info">
         <div><strong>🖱️ 마우스 조작</strong></div>
         <div>• 좌클릭 + 드래그: 회전</div>
@@ -213,79 +233,56 @@
     </div>
 </div>
 
-<div class="footer">
-    <div class="info-grid">
-        <div class="info-section">
-            <h3>🔷 Underlay (물리적 네트워크)</h3>
-            <div><strong>개념:</strong> 데이터가 실제로 이동하는 물리적 네트워크 인프라</div>
-            <div><strong>구성요소:</strong> 스위치, 라우터, 케이블 등 물리적 장비</div>
-            <div><strong>역할:</strong> Overlay 네트워크를 위한 기본 IP 라우팅 경로 제공 (OSPF Area 0)</div>
-            <div><strong>프로토콜:</strong> OSPF, PIM Sparse-Mode</div>
-            <div><strong>물리적 연결:</strong>
-                <br>• N9K-1 ↔ N9K-3: 1.1.13.0/30
-                <br>• N9K-1 ↔ N9K-4: 1.1.14.0/30
-                <br>• N9K-2 ↔ N9K-3: 1.1.23.0/30
-                <br>• N9K-2 ↔ N9K-4: 1.1.24.0/30
-            </div>
-            <div><strong>특징:</strong> Spine-Leaf 구조로 모든 Leaf가 모든 Spine에 연결</div>
-        </div>
-        <div class="info-section">
-            <h3>🔶 Overlay (가상 네트워크)</h3>
-            <div><strong>개념:</strong> Underlay 위에 구축된 논리적 가상 네트워크</div>
-            <div><strong>구성요소:</strong> VTEP(Virtual Tunnel End Point) 장비들</div>
-            <div><strong>역할:</strong> VXLAN 캡슐화를 통해 물리적 위치 상관없이 L2 네트워크 확장</div>
-            <div><strong>기술:</strong> VXLAN (L2 over L3 tunneling)</div>
-            <div><strong>가상 터널:</strong>
-                <br>• VNI: 10011 (VLAN 11 매핑)
-                <br>• VTEP: N9K-3 (10.1.1.3) ↔ N9K-4 (10.1.1.4)
-                <br>• Multicast Group: 225.0.0.10
-                <br>• RP Address: 10.1.1.10 (Anycast)
-            </div>
-            <div><strong>서버 연결:</strong>
-                <br>• Server1 (172.16.11.11) → N9K-3 VTEP
-                <br>• Server2 (172.16.11.12) → N9K-4 VTEP
-            </div>
-            <div><strong>특징:</strong> 물리적 인프라 정보 없이 논리적으로 연결</div>
-        </div>
-    </div>
-</div>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
     var scene, camera, renderer;
-    var routers = {};
+    var devices = {};
     var underlayPackets = [];
     var overlayPackets = [];
     var underlayLines = [];
     var overlayLines = [];
+    var virtualSwitchElements = [];
     var labels = [];
     var animationSpeed = 1;
     var showLabels = true;
     var showUnderlay = true;
     var showOverlay = true;
+    var showVirtualSwitch = true;
     var time = 0;
 
     var isDragging = false;
     var previousMousePosition = { x: 0, y: 0 };
-    var cameraRotation = { x: 0, y: 0 };
-    var cameraDistance = 35;
-    var cameraTarget = new THREE.Vector3(0, 0, 0);
+    var cameraRotation = { x: 0.4, y: 0.8 };
+    var cameraDistance = 40;
+    var cameraTarget = new THREE.Vector3(0, 3, 0);
+
+    // IP Network 평면 위치
+    var ipNetworkY = 10;
 
     var positions = {
-        N9K1: { x: -10, y: 4, z: 8 },
-        N9K2: { x: 10, y: 4, z: 8 },
-        N9K3: { x: -10, y: 0, z: -4 },
-        N9K4: { x: 10, y: 0, z: -4 },
-        Server1: { x: -10, y: 0, z: -12 },
-        Server2: { x: 10, y: 0, z: -12 }
+        // Spine 스위치 (위쪽)
+        N9K1: { x: -12, y: 4, z: 8 },
+        N9K2: { x: 12, y: 4, z: 8 },
+
+        // Leaf 스위치 (중간)
+        N9K3: { x: -12, y: 0, z: -4 },
+        N9K4: { x: 12, y: 0, z: -4 },
+
+        // Virtual Switches (IP Network 평면 위)
+        VirtualSwitch1: { x: -12, y: ipNetworkY, z: -4 },
+        VirtualSwitch2: { x: 12, y: ipNetworkY, z: -4 },
+
+        // 서버 (아래쪽)
+        Server1: { x: -12, y: 0, z: -14 },
+        Server2: { x: 12, y: 0, z: -14 }
     };
 
     function init() {
         var container = document.getElementById('canvas-container');
 
         scene = new THREE.Scene();
-        scene.background = new THREE.Color(0xf5f5f5);
-        scene.fog = new THREE.Fog(0xf5f5f5, 40, 80);
+        scene.background = new THREE.Color(0x0a0a0a);
+        scene.fog = new THREE.Fog(0x0a0a0a, 50, 100);
 
         camera = new THREE.PerspectiveCamera(
             60,
@@ -297,53 +294,62 @@
 
         renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         container.appendChild(renderer.domElement);
 
-        var ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        var ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
         scene.add(ambientLight);
 
-        var directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight1.position.set(20, 30, 20);
-        scene.add(directionalLight1);
+        var directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(20, 30, 20);
+        directionalLight.castShadow = true;
+        scene.add(directionalLight);
 
-        var directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
-        directionalLight2.position.set(-20, 20, -20);
-        scene.add(directionalLight2);
+        var fillLight = new THREE.DirectionalLight(0x3498db, 0.3);
+        fillLight.position.set(-20, 20, -20);
+        scene.add(fillLight);
 
-        var gridHelper = new THREE.GridHelper(60, 60, 0xcccccc, 0xe0e0e0);
+        var gridHelper = new THREE.GridHelper(60, 60, 0x333333, 0x222222);
+        gridHelper.position.y = -2;
         scene.add(gridHelper);
 
-        createRouter('N9K1', positions.N9K1, 0x2ecc71, 'Spine', false);
-        createRouter('N9K2', positions.N9K2, 0x2ecc71, 'Spine', false);
-        createRouter('N9K3', positions.N9K3, 0x27ae60, 'Leaf', true);
-        createRouter('N9K4', positions.N9K4, 0x27ae60, 'Leaf', true);
+        // IP Network 평면 생성
+        createIPNetworkPlane();
+
+        // 장비 생성
+        createRouter('N9K1', positions.N9K1, 0x2ecc71, 'Spine');
+        createRouter('N9K2', positions.N9K2, 0x2ecc71, 'Spine');
+        createRouter('N9K3', positions.N9K3, 0x27ae60, 'Leaf-VTEP');
+        createRouter('N9K4', positions.N9K4, 0x27ae60, 'Leaf-VTEP');
+        createVirtualSwitch('VirtualSwitch1', positions.VirtualSwitch1);
+        createVirtualSwitch('VirtualSwitch2', positions.VirtualSwitch2);
         createServer('Server1', positions.Server1, 0x95a5a6);
-        createServer('Server2', positions.Server2, 0x95a5a6);
+        createServer('Server2', positions.Server2, 0x7f8c8d);
 
-        var underlayConnections = [
-            { from: 'N9K1', to: 'N9K3', label: '1.1.13.0/30' },
-            { from: 'N9K1', to: 'N9K4', label: '1.1.14.0/30' },
-            { from: 'N9K2', to: 'N9K3', label: '1.1.23.0/30' },
-            { from: 'N9K2', to: 'N9K4', label: '1.1.24.0/30' }
-        ];
+        // Underlay 연결
+        createUnderlayConnection('N9K1', 'N9K3', 0);
+        createUnderlayConnection('N9K1', 'N9K4', 1);
+        createUnderlayConnection('N9K2', 'N9K3', 2);
+        createUnderlayConnection('N9K2', 'N9K4', 3);
 
-        var overlayConnections = [
-            { from: 'N9K3', to: 'N9K4', label: 'VXLAN Tunnel' },
-            { from: 'N9K3', to: 'Server1', label: 'VLAN 11' },
-            { from: 'N9K4', to: 'Server2', label: 'VLAN 11' }
-        ];
+        // Overlay 연결 (Virtual Switch를 통해)
+        createOverlayConnection('VirtualSwitch1', 'VirtualSwitch2', 0);
 
-        for (var i = 0; i < underlayConnections.length; i++) {
-            createConnection(underlayConnections[i].from, underlayConnections[i].to, i, 'underlay');
-        }
+        // VTEP와 Virtual Switch 로컬 연결
+        createLocalConnection('N9K3', 'VirtualSwitch1', 'vtep');
+        createLocalConnection('N9K4', 'VirtualSwitch2', 'vtep');
 
-        for (var j = 0; j < overlayConnections.length; j++) {
-            createConnection(overlayConnections[j].from, overlayConnections[j].to, j, 'overlay');
-        }
+        // Virtual Switch와 Server 연결
+        createLocalConnection('VirtualSwitch1', 'Server1', 'access');
+        createLocalConnection('VirtualSwitch2', 'Server2', 'access');
 
+        // 라벨 생성
         var posKeys = Object.keys(positions);
         for (var k = 0; k < posKeys.length; k++) {
-            createLabel(posKeys[k], positions[posKeys[k]]);
+            if (!posKeys[k].includes('VirtualSwitch')) {
+                createLabel(posKeys[k], positions[posKeys[k]]);
+            }
         }
 
         window.addEventListener('resize', onWindowResize);
@@ -373,9 +379,456 @@
             this.classList.toggle('active');
         });
 
+        document.getElementById('virtualSwitchBtn').addEventListener('click', function() {
+            showVirtualSwitch = !showVirtualSwitch;
+            this.classList.toggle('active');
+        });
+
         document.getElementById('captureBtn').addEventListener('click', captureFrame);
 
         animate();
+    }
+
+    function createIPNetworkPlane() {
+        // 큰 반투명 평면
+        var planeGeo = new THREE.CircleGeometry(18, 64);
+        var planeMat = new THREE.MeshPhongMaterial({
+            color: 0x3498db,
+            transparent: true,
+            opacity: 0.15,
+            side: THREE.DoubleSide,
+            emissive: 0x3498db,
+            emissiveIntensity: 0.1
+        });
+        var plane = new THREE.Mesh(planeGeo, planeMat);
+        plane.rotation.x = -Math.PI / 2;
+        plane.position.set(0, ipNetworkY, -4);
+        scene.add(plane);
+        virtualSwitchElements.push(plane);
+
+        // 테두리 링
+        var ringGeo = new THREE.RingGeometry(17.5, 18, 64);
+        var ringMat = new THREE.MeshBasicMaterial({
+            color: 0x3498db,
+            transparent: true,
+            opacity: 0.6,
+            side: THREE.DoubleSide
+        });
+        var ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.set(0, ipNetworkY + 0.01, -4);
+        scene.add(ring);
+        virtualSwitchElements.push(ring);
+
+        // "IP Network" 텍스트
+        var canvas = document.createElement('canvas');
+        var ctx = canvas.getContext('2d');
+        canvas.width = 512;
+        canvas.height = 128;
+
+        ctx.fillStyle = 'rgba(52, 152, 219, 0.3)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.font = 'bold 56px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('IP Network', 256, 80);
+
+        var texture = new THREE.CanvasTexture(canvas);
+        var spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+        var sprite = new THREE.Sprite(spriteMat);
+        sprite.position.set(0, ipNetworkY + 0.5, -4);
+        sprite.scale.set(12, 3, 1);
+        scene.add(sprite);
+        virtualSwitchElements.push(sprite);
+    }
+
+    function createVirtualSwitch(name, position) {
+        var group = new THREE.Group();
+
+        // 메인 바디
+        var bodyGeo = new THREE.BoxGeometry(3.5, 1.2, 3.5);
+        var bodyMat = new THREE.MeshPhongMaterial({
+            color: 0xff6b6b,
+            transparent: true,
+            opacity: 0.7,
+            specular: 0x888888,
+            shininess: 60,
+            emissive: 0xff6b6b,
+            emissiveIntensity: 0.4
+        });
+        var body = new THREE.Mesh(bodyGeo, bodyMat);
+        group.add(body);
+
+        // 와이어프레임
+        var wireframeGeo = new THREE.EdgesGeometry(bodyGeo);
+        var wireframeMat = new THREE.LineBasicMaterial({
+            color: 0xff3333,
+            linewidth: 3,
+            transparent: true,
+            opacity: 0.9
+        });
+        var wireframe = new THREE.LineSegments(wireframeGeo, wireframeMat);
+        group.add(wireframe);
+
+        // 글로우 효과
+        var glowGeo = new THREE.BoxGeometry(4, 1.7, 4);
+        var glowMat = new THREE.MeshBasicMaterial({
+            color: 0xff6b6b,
+            transparent: true,
+            opacity: 0.2,
+            side: THREE.BackSide
+        });
+        var glow = new THREE.Mesh(glowGeo, glowMat);
+        group.add(glow);
+        group.userData.glow = glow;
+
+        // 포트 표시
+        for (var i = 0; i < 4; i++) {
+            var angle = (i / 4) * Math.PI * 2;
+            var radius = 2;
+            var portGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.4);
+            var portMat = new THREE.MeshPhongMaterial({
+                color: 0xffff00,
+                emissive: 0xffff00,
+                emissiveIntensity: 0.8
+            });
+            var port = new THREE.Mesh(portGeo, portMat);
+            port.position.set(
+                Math.cos(angle) * radius,
+                0,
+                Math.sin(angle) * radius
+            );
+            port.rotation.z = Math.PI / 2;
+            group.add(port);
+        }
+
+        // 라벨
+        var canvas = document.createElement('canvas');
+        var ctx = canvas.getContext('2d');
+        canvas.width = 256;
+        canvas.height = 128;
+
+        ctx.fillStyle = 'rgba(255, 107, 107, 0.9)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 32px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Virtual', 128, 50);
+        ctx.fillText('Switch', 128, 90);
+
+        var texture = new THREE.CanvasTexture(canvas);
+        var labelMat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+        var label = new THREE.Sprite(labelMat);
+        label.position.set(0, 0, 1.8);
+        label.scale.set(3.5, 1.75, 1);
+        group.add(label);
+
+        group.position.set(position.x, position.y, position.z);
+        scene.add(group);
+        devices[name] = group;
+        virtualSwitchElements.push(group);
+    }
+
+    function createRouter(name, position, color, type) {
+        var group = new THREE.Group();
+
+        var geometry = new THREE.BoxGeometry(2.5, 3, 2.5);
+        var material = new THREE.MeshPhongMaterial({
+            color: color,
+            specular: 0x666666,
+            shininess: 40
+        });
+        var mesh = new THREE.Mesh(geometry, material);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        group.add(mesh);
+
+        var edgesGeo = new THREE.EdgesGeometry(geometry);
+        var edgesMat = new THREE.LineBasicMaterial({ color: 0x1a1a1a, linewidth: 2 });
+        var edges = new THREE.LineSegments(edgesGeo, edgesMat);
+        group.add(edges);
+
+        // 패널
+        for (var i = 0; i < 6; i++) {
+            var panelGeo = new THREE.BoxGeometry(2.6, 0.35, 0.1);
+            var panelMat = new THREE.MeshPhongMaterial({ color: 0x2c3e50 });
+            var panel = new THREE.Mesh(panelGeo, panelMat);
+            panel.position.set(0, -1.3 + i * 0.5, 1.26);
+            group.add(panel);
+
+            for (var j = 0; j < 4; j++) {
+                var portGeo = new THREE.BoxGeometry(0.15, 0.15, 0.05);
+                var portMat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a });
+                var port = new THREE.Mesh(portGeo, portMat);
+                port.position.set(-0.9 + j * 0.6, -1.3 + i * 0.5, 1.32);
+                group.add(port);
+            }
+        }
+
+        // LED
+        var leds = [];
+        for (var i = 0; i < 10; i++) {
+            var ledGeo = new THREE.SphereGeometry(0.08);
+            var ledMat = new THREE.MeshPhongMaterial({
+                color: 0x2ecc71,
+                emissive: 0x2ecc71,
+                emissiveIntensity: 0.5
+            });
+            var led = new THREE.Mesh(ledGeo, ledMat);
+            led.position.set(-1 + i * 0.22, 1.3, 1.27);
+            led.userData = { ledIndex: i, material: ledMat };
+            group.add(led);
+            leds.push(led);
+        }
+        group.userData.leds = leds;
+
+        // VTEP 라벨
+        if (type === 'Leaf-VTEP') {
+            var vtepGeo = new THREE.BoxGeometry(2, 0.4, 0.15);
+            var vtepMat = new THREE.MeshPhongMaterial({
+                color: 0xe74c3c,
+                emissive: 0xe74c3c,
+                emissiveIntensity: 0.3
+            });
+            var vtep = new THREE.Mesh(vtepGeo, vtepMat);
+            vtep.position.set(0, -1.7, 1.28);
+            group.add(vtep);
+        }
+
+        group.position.set(position.x, position.y, position.z);
+        scene.add(group);
+        devices[name] = group;
+    }
+
+    function createServer(name, position, color) {
+        var group = new THREE.Group();
+
+        var geometry = new THREE.BoxGeometry(1.8, 2.5, 1.8);
+        var material = new THREE.MeshPhongMaterial({
+            color: color,
+            specular: 0x555555,
+            shininess: 30
+        });
+        var mesh = new THREE.Mesh(geometry, material);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        group.add(mesh);
+
+        var edgesGeo = new THREE.EdgesGeometry(geometry);
+        var edgesMat = new THREE.LineBasicMaterial({ color: 0x1a1a1a, linewidth: 2 });
+        var edges = new THREE.LineSegments(edgesGeo, edgesMat);
+        group.add(edges);
+
+        var screenGeo = new THREE.PlaneGeometry(1.3, 1.3);
+        var screenMat = new THREE.MeshPhongMaterial({
+            color: 0x2c3e50,
+            emissive: 0x3498db,
+            emissiveIntensity: 0.3
+        });
+        var screen = new THREE.Mesh(screenGeo, screenMat);
+        screen.position.set(0, 0.2, 0.91);
+        group.add(screen);
+
+        var bezelGeo = new THREE.PlaneGeometry(1.5, 1.5);
+        var bezelMat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a });
+        var bezel = new THREE.Mesh(bezelGeo, bezelMat);
+        bezel.position.set(0, 0.2, 0.9);
+        group.add(bezel);
+
+        group.position.set(position.x, position.y, position.z);
+        scene.add(group);
+        devices[name] = group;
+    }
+
+    function createUnderlayConnection(fromName, toName, index) {
+        var fromPos = positions[fromName];
+        var toPos = positions[toName];
+
+        var curve = new THREE.LineCurve3(
+            new THREE.Vector3(fromPos.x, fromPos.y, fromPos.z),
+            new THREE.Vector3(toPos.x, toPos.y, toPos.z)
+        );
+
+        var points = curve.getPoints(50);
+        var geometry = new THREE.BufferGeometry().setFromPoints(points);
+        var material = new THREE.LineBasicMaterial({
+            color: 0x3498db,
+            linewidth: 3,
+            transparent: true,
+            opacity: 0.8
+        });
+
+        var line = new THREE.Line(geometry, material);
+        scene.add(line);
+        underlayLines.push(line);
+
+        var tubeGeo = new THREE.TubeGeometry(curve, 20, 0.08, 8, false);
+        var tubeMat = new THREE.MeshPhongMaterial({
+            color: 0x3498db,
+            transparent: true,
+            opacity: 0.6,
+            emissive: 0x3498db,
+            emissiveIntensity: 0.3
+        });
+        var tube = new THREE.Mesh(tubeGeo, tubeMat);
+        scene.add(tube);
+        underlayLines.push(tube);
+
+        for (var i = 0; i < 3; i++) {
+            var packetGeo = new THREE.SphereGeometry(0.15);
+            var packetMat = new THREE.MeshPhongMaterial({
+                color: 0x3498db,
+                transparent: true,
+                opacity: 0.9,
+                emissive: 0x3498db,
+                emissiveIntensity: 0.5
+            });
+            var packet = new THREE.Mesh(packetGeo, packetMat);
+
+            packet.userData = {
+                curve: curve,
+                progress: i * 0.33,
+                speed: 0.3,
+                index: index
+            };
+            scene.add(packet);
+            underlayPackets.push(packet);
+        }
+    }
+
+    function createOverlayConnection(fromName, toName, index) {
+        var fromPos = positions[fromName];
+        var toPos = positions[toName];
+
+        var midY = ipNetworkY + 4;
+
+        var curve = new THREE.QuadraticBezierCurve3(
+            new THREE.Vector3(fromPos.x, fromPos.y, fromPos.z),
+            new THREE.Vector3((fromPos.x + toPos.x) / 2, midY, (fromPos.z + toPos.z) / 2),
+            new THREE.Vector3(toPos.x, toPos.y, toPos.z)
+        );
+
+        var points = curve.getPoints(50);
+        var geometry = new THREE.BufferGeometry().setFromPoints(points);
+        var material = new THREE.LineBasicMaterial({
+            color: 0xe74c3c,
+            linewidth: 4,
+            transparent: true,
+            opacity: 0.8
+        });
+
+        var line = new THREE.Line(geometry, material);
+        scene.add(line);
+        overlayLines.push(line);
+
+        var tubeGeo = new THREE.TubeGeometry(curve, 50, 0.15, 8, false);
+        var tubeMat = new THREE.MeshPhongMaterial({
+            color: 0xe74c3c,
+            transparent: true,
+            opacity: 0.6,
+            emissive: 0xe74c3c,
+            emissiveIntensity: 0.4
+        });
+        var tube = new THREE.Mesh(tubeGeo, tubeMat);
+        scene.add(tube);
+        overlayLines.push(tube);
+
+        for (var i = 0; i < 3; i++) {
+            var packetGeo = new THREE.SphereGeometry(0.3);
+            var packetMat = new THREE.MeshPhongMaterial({
+                color: 0xf39c12,
+                transparent: true,
+                opacity: 0.9,
+                emissive: 0xf39c12,
+                emissiveIntensity: 0.6
+            });
+            var packet = new THREE.Mesh(packetGeo, packetMat);
+
+            packet.userData = {
+                curve: curve,
+                progress: i / 3,
+                speed: 0.15,
+                index: index
+            };
+            scene.add(packet);
+            overlayPackets.push(packet);
+        }
+    }
+
+    function createLocalConnection(fromName, toName, type) {
+        var fromPos = positions[fromName];
+        var toPos = positions[toName];
+
+        var curve = new THREE.LineCurve3(
+            new THREE.Vector3(fromPos.x, fromPos.y, fromPos.z),
+            new THREE.Vector3(toPos.x, toPos.y, toPos.z)
+        );
+
+        var points = curve.getPoints(20);
+        var geometry = new THREE.BufferGeometry().setFromPoints(points);
+
+        var lineColor = type === 'vtep' ? 0xff6b6b : 0x95a5a6;
+        var material = new THREE.LineDashedMaterial({
+            color: lineColor,
+            linewidth: 2,
+            dashSize: 0.3,
+            gapSize: 0.2,
+            transparent: true,
+            opacity: 0.7
+        });
+
+        var line = new THREE.Line(geometry, material);
+        line.computeLineDistances();
+        scene.add(line);
+
+        if (type === 'vtep' || type === 'access') {
+            virtualSwitchElements.push(line);
+        }
+
+        var tubeRadius = type === 'vtep' ? 0.08 : 0.05;
+        var tubeGeo = new THREE.TubeGeometry(curve, 20, tubeRadius, 8, false);
+        var tubeMat = new THREE.MeshPhongMaterial({
+            color: lineColor,
+            transparent: true,
+            opacity: type === 'vtep' ? 0.5 : 0.3,
+            emissive: lineColor,
+            emissiveIntensity: type === 'vtep' ? 0.3 : 0.1
+        });
+        var tube = new THREE.Mesh(tubeGeo, tubeMat);
+        scene.add(tube);
+
+        if (type === 'vtep' || type === 'access') {
+            virtualSwitchElements.push(tube);
+        }
+    }
+
+    function createLabel(text, position) {
+        var canvas = document.createElement('canvas');
+        var ctx = canvas.getContext('2d');
+        canvas.width = 256;
+        canvas.height = 80;
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.strokeStyle = '#3498db';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 32px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(text, 128, 50);
+
+        var texture = new THREE.CanvasTexture(canvas);
+        var material = new THREE.SpriteMaterial({ map: texture });
+        var sprite = new THREE.Sprite(material);
+        sprite.position.set(position.x, position.y + 3, position.z);
+        sprite.scale.set(4, 1, 1);
+        scene.add(sprite);
+        labels.push(sprite);
     }
 
     function onMouseDown(e) {
@@ -414,7 +867,7 @@
     function onMouseWheel(e) {
         e.preventDefault();
         cameraDistance += e.deltaY * 0.02;
-        cameraDistance = Math.max(10, Math.min(80, cameraDistance));
+        cameraDistance = Math.max(15, Math.min(80, cameraDistance));
         updateCameraPosition();
     }
 
@@ -431,209 +884,36 @@
         camera.lookAt(cameraTarget);
     }
 
-    function createRouter(name, position, color, type, isVTEP) {
-        var group = new THREE.Group();
-
-        var geometry = new THREE.BoxGeometry(2, 3, 2);
-        var material = new THREE.MeshPhongMaterial({
-            color: color,
-            specular: 0x444444,
-            shininess: 30
-        });
-        var mesh = new THREE.Mesh(geometry, material);
-        group.add(mesh);
-
-        var edgesGeo = new THREE.EdgesGeometry(geometry);
-        var edgesMat = new THREE.LineBasicMaterial({ color: 0x333333, linewidth: 2 });
-        var edges = new THREE.LineSegments(edgesGeo, edgesMat);
-        group.add(edges);
-
-        var panelGeo = new THREE.BoxGeometry(2.1, 0.3, 0.1);
-        var panelMat = new THREE.MeshPhongMaterial({ color: 0x2c3e50 });
-        for (var i = 0; i < 5; i++) {
-            var panel = new THREE.Mesh(panelGeo, panelMat);
-            panel.position.set(0, -1.2 + i * 0.6, 1.01);
-            group.add(panel);
-        }
-
-        var leds = [];
-        for (var i = 0; i < 8; i++) {
-            var ledGeo = new THREE.SphereGeometry(0.08);
-            var ledMat = new THREE.MeshBasicMaterial({ color: 0x2ecc71 });
-            var led = new THREE.Mesh(ledGeo, ledMat);
-            led.position.set(-0.8 + i * 0.23, 1.2, 1.02);
-            led.userData = { ledIndex: i, material: ledMat };
-            group.add(led);
-            leds.push(led);
-        }
-        group.userData.leds = leds;
-
-        if (isVTEP) {
-            var vtepLabelGeo = new THREE.BoxGeometry(1.5, 0.3, 0.1);
-            var vtepLabelMat = new THREE.MeshBasicMaterial({ color: 0xe74c3c });
-            var vtepLabel = new THREE.Mesh(vtepLabelGeo, vtepLabelMat);
-            vtepLabel.position.set(0, -1.7, 1.02);
-            group.add(vtepLabel);
-        }
-
-        group.position.set(position.x, position.y, position.z);
-        scene.add(group);
-        routers[name] = group;
-    }
-
-    function createServer(name, position, color) {
-        var group = new THREE.Group();
-
-        var geometry = new THREE.BoxGeometry(1.5, 2, 1.5);
-        var material = new THREE.MeshPhongMaterial({
-            color: color,
-            specular: 0x444444,
-            shininess: 30
-        });
-        var mesh = new THREE.Mesh(geometry, material);
-        group.add(mesh);
-
-        var edgesGeo = new THREE.EdgesGeometry(geometry);
-        var edgesMat = new THREE.LineBasicMaterial({ color: 0x333333, linewidth: 2 });
-        var edges = new THREE.LineSegments(edgesGeo, edgesMat);
-        group.add(edges);
-
-        var iconGeo = new THREE.CircleGeometry(0.5, 32);
-        var iconMat = new THREE.MeshBasicMaterial({ color: 0x2c3e50 });
-        var icon = new THREE.Mesh(iconGeo, iconMat);
-        icon.position.set(0, 0, 0.76);
-        group.add(icon);
-
-        group.position.set(position.x, position.y, position.z);
-        scene.add(group);
-        routers[name] = group;
-    }
-
-    function createConnection(fromName, toName, index, type) {
-        var fromPos = positions[fromName];
-        var toPos = positions[toName];
-
-        var midY = Math.max(fromPos.y, toPos.y) + (type === 'overlay' ? 6 : 2);
-
-        var curve = new THREE.QuadraticBezierCurve3(
-            new THREE.Vector3(fromPos.x, fromPos.y, fromPos.z),
-            new THREE.Vector3(
-                (fromPos.x + toPos.x) / 2,
-                midY,
-                (fromPos.z + toPos.z) / 2
-            ),
-            new THREE.Vector3(toPos.x, toPos.y, toPos.z)
-        );
-
-        var points = curve.getPoints(50);
-        var geometry = new THREE.BufferGeometry().setFromPoints(points);
-
-        var lineColor = type === 'overlay' ? 0xe74c3c : 0x3498db;
-        var material = new THREE.LineBasicMaterial({
-            color: lineColor,
-            linewidth: 3,
-            transparent: true,
-            opacity: 0.7
-        });
-
-        var line = new THREE.Line(geometry, material);
-        line.userData.type = type;
-        scene.add(line);
-
-        if (type === 'overlay') {
-            overlayLines.push(line);
-        } else {
-            underlayLines.push(line);
-        }
-
-        var tubeGeo = new THREE.TubeGeometry(curve, 50, type === 'overlay' ? 0.08 : 0.05, 8, false);
-        var tubeMat = new THREE.MeshBasicMaterial({
-            color: lineColor,
-            transparent: true,
-            opacity: 0.4
-        });
-        var tube = new THREE.Mesh(tubeGeo, tubeMat);
-        tube.userData.type = type;
-        scene.add(tube);
-
-        if (type === 'overlay') {
-            overlayLines.push(tube);
-        } else {
-            underlayLines.push(tube);
-        }
-
-        var numPackets = type === 'overlay' ? 2 : 3;
-        for (var i = 0; i < numPackets; i++) {
-            var packetGeo = new THREE.SphereGeometry(type === 'overlay' ? 0.25 : 0.15);
-            var packetColor = type === 'overlay' ? 0xf39c12 : 0x3498db;
-            var packetMat = new THREE.MeshBasicMaterial({
-                color: packetColor,
-                transparent: true,
-                opacity: 0.9
-            });
-            var packet = new THREE.Mesh(packetGeo, packetMat);
-
-            packet.userData = {
-                curve: curve,
-                progress: i / numPackets,
-                speed: type === 'overlay' ? 0.15 : 0.25,
-                index: index,
-                type: type
-            };
-            scene.add(packet);
-
-            if (type === 'overlay') {
-                overlayPackets.push(packet);
-            } else {
-                underlayPackets.push(packet);
-            }
-        }
-    }
-
-    function createLabel(text, position) {
-        var canvas = document.createElement('canvas');
-        var ctx = canvas.getContext('2d');
-        canvas.width = 256;
-        canvas.height = 80;
-
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        ctx.strokeStyle = '#667eea';
-        ctx.lineWidth = 4;
-        ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
-
-        ctx.fillStyle = '#2c3e50';
-        ctx.font = 'bold 32px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(text, 128, 50);
-
-        var texture = new THREE.CanvasTexture(canvas);
-        var material = new THREE.SpriteMaterial({ map: texture });
-        var sprite = new THREE.Sprite(material);
-        sprite.position.set(position.x, position.y + 3, position.z);
-        sprite.scale.set(4, 1, 1);
-        scene.add(sprite);
-        labels.push(sprite);
-    }
-
     function animate() {
         requestAnimationFrame(animate);
         time += 0.016 * animationSpeed;
 
-        var routerKeys = Object.keys(routers);
-        for (var i = 0; i < routerKeys.length; i++) {
-            var router = routers[routerKeys[i]];
-            if (router.userData.leds) {
-                var leds = router.userData.leds;
+        // 장비 LED 애니메이션
+        var deviceKeys = Object.keys(devices);
+        for (var i = 0; i < deviceKeys.length; i++) {
+            var device = devices[deviceKeys[i]];
+
+            if (device.userData.leds) {
+                var leds = device.userData.leds;
                 for (var j = 0; j < leds.length; j++) {
                     var led = leds[j];
-                    var brightness = Math.sin(time * 4 + led.userData.ledIndex * 0.8) * 0.3 + 0.7;
-                    led.userData.material.color.setHSL(0.33, 0.8, brightness);
+                    var brightness = Math.sin(time * 5 + led.userData.ledIndex * 0.6) * 0.3 + 0.7;
+                    led.userData.material.emissiveIntensity = brightness;
                 }
+            }
+
+            if (device.userData.glow) {
+                var glowScale = 1 + Math.sin(time * 2) * 0.1;
+                device.userData.glow.scale.set(glowScale, glowScale, glowScale);
+                device.userData.glow.material.opacity = 0.15 + Math.sin(time * 2) * 0.05;
+            }
+
+            if (deviceKeys[i].includes('VirtualSwitch')) {
+                device.rotation.y = time * 0.2;
             }
         }
 
+        // Underlay 패킷 애니메이션
         for (var i = 0; i < underlayPackets.length; i++) {
             var packet = underlayPackets[i];
             packet.userData.progress += 0.01 * packet.userData.speed * animationSpeed;
@@ -643,10 +923,10 @@
 
             var point = packet.userData.curve.getPoint(packet.userData.progress);
             packet.position.copy(point);
-
             packet.visible = showUnderlay;
         }
 
+        // Overlay 패킷 애니메이션
         for (var i = 0; i < overlayPackets.length; i++) {
             var packet = overlayPackets[i];
             packet.userData.progress += 0.008 * packet.userData.speed * animationSpeed;
@@ -657,19 +937,27 @@
             var point = packet.userData.curve.getPoint(packet.userData.progress);
             packet.position.copy(point);
 
-            var scale = 1 + Math.sin(time * 3 + packet.userData.index) * 0.2;
+            var scale = 1 + Math.sin(time * 4 + packet.userData.index) * 0.2;
             packet.scale.set(scale, scale, scale);
             packet.visible = showOverlay;
         }
 
+        // Underlay 라인 표시
         for (var i = 0; i < underlayLines.length; i++) {
             underlayLines[i].visible = showUnderlay;
         }
 
+        // Overlay 라인 표시
         for (var i = 0; i < overlayLines.length; i++) {
             overlayLines[i].visible = showOverlay;
         }
 
+        // Virtual Switch 요소 표시
+        for (var i = 0; i < virtualSwitchElements.length; i++) {
+            virtualSwitchElements[i].visible = showVirtualSwitch;
+        }
+
+        // 라벨 표시
         for (var i = 0; i < labels.length; i++) {
             labels[i].visible = showLabels;
         }
@@ -687,7 +975,7 @@
     function captureFrame() {
         var dataUrl = renderer.domElement.toDataURL('image/png');
         var link = document.createElement('a');
-        link.download = 'vxlan-network-' + Date.now() + '.png';
+        link.download = 'vxlan-virtual-switch-' + Date.now() + '.png';
         link.href = dataUrl;
         link.click();
     }
